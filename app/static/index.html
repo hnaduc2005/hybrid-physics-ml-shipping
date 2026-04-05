@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hệ thống Định tuyến Thuỷ nội địa – PIML Navigator</title>
+  <meta name="description" content="Mô phỏng mạng lưới thuỷ nội địa Việt Nam với dự báo nhiên liệu và CO2 bằng mô hình học máy hướng vật lý."/>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════ TOP NAV ═════════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-icon">⚓</span>
+    <span class="brand-name">PIML Navigator</span>
+    <span class="brand-sub">Hệ thống Định tuyến Thuỷ nội địa Việt Nam</span>
+  </div>
+  <div class="topbar-meta">
+    <span class="meta-chip">Multi-Route</span>
+    <span class="meta-chip">Physics-Informed ML</span>
+  </div>
+</header>
+
+<!-- ═══════════════════ LAYOUT ══════════════════════════════════════════════ -->
+<div class="layout">
+
+  <!-- ─── LEFT SIDEBAR ─────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Route selectors -->
+    <section class="panel">
+      <h2 class="panel-title">📍 Chọn tuyến đường</h2>
+
+      <div class="field">
+        <label>Điểm xuất phát (🟢)</label>
+        <div class="coord-box" id="coord-origin" title="Nhấp vào bản đồ để chọn">Chưa chọn (Nhấp vào bản đồ)</div>
+      </div>
+
+      <div class="swap-btn-row" style="justify-content:center; margin: 15px 0;">
+        <button id="btn-swap" title="Đổi chiều" class="icon-btn">⇄</button>
+      </div>
+
+      <div class="field">
+        <label>Điểm đến (🔴)</label>
+        <div class="coord-box" id="coord-dest" title="Nhấp vào bản đồ để chọn">Chưa chọn (Nhấp vào bản đồ)</div>
+      </div>
+      
+      <div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+        <em>Lưu ý: Mạng lưới giao thông thủy có thể chứa đứt gãy cục bộ. Hãy đảm bảo 2 điểm nằm trên cung đường liền mạch.</em>
+      </div>
+    </section>
+
+    <!-- Vessel parameters -->
+    <section class="panel">
+      <h2 class="panel-title">🚢 Thông số tàu</h2>
+      <div class="params-grid">
+
+        <div class="field">
+          <label for="p-speed">Tốc độ <em>(knots)</em></label>
+          <input id="p-speed" type="number" value="15" min="1" max="50" step="0.5" class="param-input"/>
+        </div>
+
+        <div class="field">
+          <label for="p-length">Chiều dài <em>(m)</em></label>
+          <input id="p-length" type="number" value="22" min="5" max="150" step="0.5" class="param-input"/>
+        </div>
+
+        <div class="field">
+          <label for="p-width">Chiều rộng <em>(m)</em></label>
+          <input id="p-width" type="number" value="5" min="1" max="30" step="0.5" class="param-input"/>
+        </div>
+
+        <div class="field">
+          <label for="p-draft">Mớn nước <em>(m)</em></label>
+          <input id="p-draft" type="number" value="1.5" min="0.3" max="8" step="0.1" class="param-input"/>
+        </div>
+
+      </div>
+
+      <!-- Physics preview -->
+      <div class="physics-preview" id="physics-preview">
+        <span class="preview-label">Công suất ước tính:</span>
+        <span class="preview-val" id="preview-power">— kW</span>
+        <span class="preview-label" style="margin-left:12px">Suất tiêu hao:</span>
+        <span class="preview-val" id="preview-rate">— L/h</span>
+      </div>
+    </section>
+
+    <!-- Find button -->
+    <button id="btn-find" class="btn-primary" disabled>
+      <span id="btn-label">Tìm tuyến đường</span>
+      <span id="btn-spinner" class="spinner hidden"></span>
+    </button>
+
+    <!-- Results list -->
+    <section class="panel panel-results hidden" id="results-panel">
+      <h2 class="panel-title">🗺️ Tuyến đề xuất</h2>
+      <div id="route-cards"></div>
+    </section>
+
+  </aside>
+
+  <!-- ─── MAP ──────────────────────────────────────────────────────────── -->
+  <main class="map-container">
+    <div id="map"></div>
+
+    <!-- Map legend -->
+    <div class="map-legend" id="map-legend"></div>
+
+    <!-- Click-mode hint -->
+    <div class="map-hint hidden" id="map-hint">
+      <span id="hint-text">Nhấp để chọn <strong>điểm xuất phát</strong></span>
+    </div>
+  </main>
+
+</div>
+
+<!-- ─── ROUTE DETAIL MODAL ──────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
